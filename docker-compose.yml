@@ -1,0 +1,38 @@
+# One command runs the whole stack:  docker compose up --build
+services:
+  db:
+    # pgvector image: Postgres + vector search, needed from stage 2 (RAG)
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: workbench
+      POSTGRES_PASSWORD: workbench_dev_password
+      POSTGRES_DB: workbench
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workbench -d workbench"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+psycopg://workbench:workbench_dev_password@db:5432/workbench
+      STORAGE_DIR: /srv/data/uploads
+      # Ollama runs on your own machine (outside Docker); stage 6 moves it into the cloud setup
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - uploads:/srv/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  uploads:
