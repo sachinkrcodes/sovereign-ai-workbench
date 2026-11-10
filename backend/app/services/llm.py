@@ -1,4 +1,4 @@
-"""Chat model (the part that writes answers) running in Ollama on your own machine."""
+"""Chat model (the part that writes answers and drives agents) running in Ollama on your machine."""
 
 from functools import lru_cache
 from typing import Protocol
@@ -13,24 +13,26 @@ class ChatModel(Protocol):
     model_name: str
 
     def generate(self, system: str, user: str) -> str: ...
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict: ...
 
 
 class OllamaChat:
-    def __init__(self, base_url: str, model: str, timeout: float = 180) -> None:
+    def __init__(self, base_url: str, model: str, timeout: float = 180, num_ctx: int = 6144) -> None:
         self.base_url = base_url.rstrip("/")
         self.model_name = model
         self.timeout = timeout
+        self.num_ctx = num_ctx
 
-    def generate(self, system: str, user: str) -> str:
-        payload = {
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+        """Send a conversation, get back the assistant message (may contain tool_calls)."""
+        payload: dict = {
             "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "stream": False,
-            "options": {"temperature": 0.1, "num_ctx": 4096},
+            "options": {"temperature": 0.1, "num_ctx": self.num_ctx},
         }
+        if tools:
+            payload["tools"] = tools
         try:
             response = httpx.post(f"{self.base_url}/api/chat", json=payload, timeout=self.timeout)
         except httpx.HTTPError as exc:
@@ -38,16 +40,21 @@ class OllamaChat:
         if response.status_code != 200:
             raise LLMUnavailable(describe_ollama_http_error(response, self.model_name))
         message = response.json().get("message") or {}
-        content = (message.get("content") or "").strip()
-        if not content:
+        if not (message.get("content") or "").strip() and not message.get("tool_calls"):
             raise LLMUnavailable("The model returned an empty answer. Try again.")
-        return content
+        return message
+
+    def generate(self, system: str, user: str) -> str:
+        message = self.chat(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}]
+        )
+        return (message.get("content") or "").strip()
 
 
 @lru_cache
 def _default_chat() -> OllamaChat:
     s = get_settings()
-    return OllamaChat(s.ollama_base_url, s.chat_model, s.ai_timeout_seconds)
+    return OllamaChat(s.ollama_base_url, s.chat_model, s.ai_timeout_seconds, s.chat_context_tokens)
 
 
 def get_chat() -> ChatModel:

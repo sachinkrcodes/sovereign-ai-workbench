@@ -109,3 +109,55 @@ class IndexResult(BaseModel):
     model: str
     documents_processed: int
     chunks_indexed: int
+
+
+# ---------- agents (stage 3) ----------
+
+
+class AgentInfo(BaseModel):
+    name: str
+    title: str
+    description: str
+    allowed_tools: list[str]
+    max_steps: int
+
+
+class AgentRunRequest(BaseModel):
+    task: str = Field(min_length=3, max_length=2000)
+
+
+class AgentStepOut(BaseModel):
+    step: int
+    tool: str
+    arguments: dict
+    status: str  # ok | denied | error
+    output_preview: str
+    duration_ms: int
+
+
+class AgentSourceOut(BaseModel):
+    filename: str
+    page: int | None
+
+
+class AgentRunOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    agent: str
+    task: str
+    status: str
+    answer: str | None
+    steps: list[AgentStepOut]
+    sources: list[AgentSourceOut]
+    model: str | None
+    error: str | None
+    duration_ms: int
+    created_at: datetime
+
+
+class AgentRunList(BaseModel):
+    items: list[AgentRunOut]
+    total: int
+    limit: int
+    offset: int

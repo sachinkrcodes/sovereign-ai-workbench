@@ -6,7 +6,7 @@ used for semantic search)."""
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -75,3 +75,22 @@ class ChunkEmbedding(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     chunk: Mapped[Chunk] = relationship(back_populates="embedding")
+
+
+class AgentRun(Base):
+    """One recorded run of an agent: who ran what task, every tool it used, and the result.
+    This is the start of the audit trail (login and users are added in stage 4)."""
+
+    __tablename__ = "agent_runs"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    agent: Mapped[str] = mapped_column(String(50), index=True)
+    task: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20))  # completed | step_limit | failed
+    answer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    steps: Mapped[list] = mapped_column(JSON, default=list)
+    sources: Mapped[list] = mapped_column(JSON, default=list)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)

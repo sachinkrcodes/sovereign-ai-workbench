@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Sovereign AI Workbench"
-    app_version: str = "0.2.0"
+    app_version: str = "0.3.0"
     environment: str = "development"
 
     # SQLite for quick local runs; Postgres (pgvector) in Docker / AWS.
@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     embedding_query_prefix: str = "search_query: "
     chat_model: str = "llama3.2:3b"
     ai_timeout_seconds: int = 180
+    chat_context_tokens: int = 6144
     embed_batch_size: int = 16
 
     # Comma separated list of allowed browser origins

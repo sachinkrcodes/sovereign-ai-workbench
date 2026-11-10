@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import documents, health, indexing, search
+from app.routers import agents, documents, health, indexing, search
 
 settings = get_settings()
 
@@ -34,7 +34,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Private, governed AI workbench - documents, search and cited answers (stage 2).",
+    description="Private, governed AI workbench - documents, cited answers and governed agents (stage 3).",
     lifespan=lifespan,
 )
 
@@ -67,6 +67,7 @@ app.include_router(health.router)
 app.include_router(documents.router)
 app.include_router(indexing.router)
 app.include_router(search.router)
+app.include_router(agents.router)
 
 
 @app.get("/", tags=["health"])

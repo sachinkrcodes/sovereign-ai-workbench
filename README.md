@@ -4,15 +4,15 @@ A private, governed AI platform for confidential industrial work (SIH 2026, PS *
 Open-weight LLMs, document search (RAG) with source citations, governed agents, audit logs and
 cost tracking - all running inside your own AWS network, so company data never leaves.
 
-> Status: **Stage 2 of 7 - Search and cited answers (RAG)**.
+> Status: **Stage 3 of 7 - Governed agents with tools and an audit trail**.
 
 ## Roadmap
 | Stage | What | Status |
 |---|---|---|
 | 1 | Backend API, document upload, text extraction, chunking | done |
 | 2 | Local embeddings, hybrid search, RAG answers with verified citations | done |
-| 3 | Agents and tools | next |
-| 4 | Login, roles, audit log, cost tracking | |
+| 3 | Governed agents: tool permissions, step limits, recorded runs | done |
+| 4 | Login, roles, full audit log, cost tracking | next |
 | 5 | Web UI (liquid glass, responsive) | |
 | 6 | Docker, Kubernetes, Terraform, CI/CD, AWS deploy | |
 | 7 | Docs, architecture diagram, demo | |
@@ -52,6 +52,16 @@ Open http://localhost:8000/docs. Check http://localhost:8000/health/ai to see if
 
 **Or with Docker:** `docker compose up --build` (Ollama still runs on your machine).
 
+## Agents (stage 3)
+| Agent | Allowed tools | Max steps |
+|---|---|---|
+| librarian | list_documents | 2 |
+| researcher | search_documents, list_documents | 4 |
+| analyst | search_documents, list_documents, get_document_text, calculator | 6 |
+
+Try: `POST /api/v1/agents/researcher/run` with `{"task": "What did the trainee do at Reliance?"}`, then open
+`GET /api/v1/agents/runs` to see exactly which tools ran.
+
 ## Try it
 1. `POST /api/v1/documents` - upload a PDF/DOCX/TXT/MD.
 2. `POST /api/v1/index` - embed everything not yet indexed.
@@ -71,6 +81,10 @@ Open http://localhost:8000/docs. Check http://localhost:8000/health/ai to see if
 | GET | `/api/v1/index/status` | How much is indexed, per document |
 | POST | `/api/v1/search` | Hybrid search (meaning + keywords) |
 | POST | `/api/v1/ask` | Cited answer from your documents |
+| GET | `/api/v1/agents` | List agents and the tools each may use |
+| POST | `/api/v1/agents/{name}/run` | Run an agent on a task: `{"task": "..."}` |
+| GET | `/api/v1/agents/runs` | Audit trail of past runs (filter with `?agent=`) |
+| GET | `/api/v1/agents/runs/{id}` | One run: every tool call, source and the final answer |
 | GET | `/health`, `/health/ready`, `/health/ai` | Liveness, database, Ollama + models |
 
 ## Design decisions (good interview answers)
@@ -90,3 +104,12 @@ Open http://localhost:8000/docs. Check http://localhost:8000/health/ai to see if
 - **Graceful AI outages** - `/ask` returns the best passages even when the chat model is unavailable.
 - **Known limit (by design for now)** - vectors are compared in memory (fine for thousands of chunks).
   Stage 6 moves this to pgvector with an index on Amazon RDS.
+- **Least-privilege agents** - each agent has its own tool allow-list. A tool call outside it is denied,
+  never executed, and recorded as `denied`.
+- **Hard limits** - max steps, max seconds and max tool output size per run; at the limit the agent must
+  answer with what it has instead of looping forever.
+- **Audit trail** - every run stores the task, each tool call (arguments, status, duration), the sources
+  used and the final answer, even when the run fails. Stage 4 adds *who* ran it.
+- **Safe calculator** - arithmetic is parsed with `ast` (no `eval`), so it cannot run code.
+- **Resilient tool loop** - a failing tool returns an error to the model instead of crashing the run;
+  small models that write tool calls as JSON text are handled too.

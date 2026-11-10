@@ -41,9 +41,20 @@ class FakeChat:
         self.fail = False
         self.last_system = ""
         self.last_user = ""
+        # Scripted replies for agent tests: each call to chat() pops the next message.
+        self.tool_turns: list[dict] = []
+        self.chat_calls: list[tuple[int, list | None]] = []
 
     def generate(self, system: str, user: str) -> str:
         if self.fail:
             raise LLMUnavailable("Cannot reach Ollama (test).")
         self.last_system, self.last_user = system, user
         return self.reply
+
+    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+        if self.fail:
+            raise LLMUnavailable("Cannot reach Ollama (test).")
+        self.chat_calls.append((len(messages), tools))
+        if self.tool_turns:
+            return self.tool_turns.pop(0)
+        return {"role": "assistant", "content": "Done."}
