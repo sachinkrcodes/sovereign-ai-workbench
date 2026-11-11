@@ -1,6 +1,7 @@
 """API response shapes (what the frontend receives)."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,6 +18,7 @@ class DocumentOut(BaseModel):
     char_count: int
     chunk_count: int
     created_at: datetime
+    uploaded_by: str | None = None
 
 
 class DocumentList(BaseModel):
@@ -161,3 +163,122 @@ class AgentRunList(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+# ---------- users, login, audit, usage (stage 4) ----------
+
+EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+Role = Literal["viewer", "analyst", "admin"]
+
+
+class UserCreate(BaseModel):
+    email: str = Field(pattern=EMAIL_PATTERN, max_length=254)
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+    role: Role = "viewer"
+
+
+class SetupRequest(BaseModel):
+    email: str = Field(pattern=EMAIL_PATTERN, max_length=254)
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class UserUpdate(BaseModel):
+    role: Role | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    name: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str
+    expires_in: int
+    user: UserOut
+
+
+class AuthStatus(BaseModel):
+    setup_required: bool
+
+
+class AuditEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    ts: str
+    user_id: str | None
+    user_email: str | None
+    action: str
+    status: str
+    resource_type: str | None
+    resource_id: str | None
+    detail: dict
+    ip: str | None
+    request_id: str | None
+    prev_hash: str
+    event_hash: str
+
+
+class AuditList(BaseModel):
+    items: list[AuditEventOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class AuditVerifyOut(BaseModel):
+    valid: bool
+    events_checked: int
+    first_invalid_id: int | None
+    head_hash: str | None
+
+
+class UsageMe(BaseModel):
+    today_tokens: int
+    daily_limit: int | None  # None = unlimited (admin)
+    remaining_today: int | None
+    total_requests: int
+    total_tokens: int
+
+
+class UsageByUser(BaseModel):
+    email: str
+    requests: int
+    total_tokens: int
+
+
+class UsageByDay(BaseModel):
+    day: str
+    requests: int
+    total_tokens: int
+
+
+class UsageByKind(BaseModel):
+    kind: str
+    requests: int
+    total_tokens: int
+
+
+class UsageSummary(BaseModel):
+    days: int
+    requests: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    actual_cost_usd: float
+    equivalent_cloud_cost_usd: float
+    pricing_note: str
+    by_user: list[UsageByUser]
+    by_day: list[UsageByDay]
+    by_kind: list[UsageByKind]

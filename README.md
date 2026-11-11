@@ -4,7 +4,7 @@ A private, governed AI platform for confidential industrial work (SIH 2026, PS *
 Open-weight LLMs, document search (RAG) with source citations, governed agents, audit logs and
 cost tracking - all running inside your own AWS network, so company data never leaves.
 
-> Status: **Stage 3 of 7 - Governed agents with tools and an audit trail**.
+> Status: **Stage 4 of 7 - Login, roles, tamper-evident audit log and usage limits**.
 
 ## Roadmap
 | Stage | What | Status |
@@ -12,8 +12,8 @@ cost tracking - all running inside your own AWS network, so company data never l
 | 1 | Backend API, document upload, text extraction, chunking | done |
 | 2 | Local embeddings, hybrid search, RAG answers with verified citations | done |
 | 3 | Governed agents: tool permissions, step limits, recorded runs | done |
-| 4 | Login, roles, full audit log, cost tracking | next |
-| 5 | Web UI (liquid glass, responsive) | |
+| 4 | Login, roles (viewer/analyst/admin), tamper-evident audit log, usage limits | done |
+| 5 | Web UI (liquid glass, responsive) | next |
 | 6 | Docker, Kubernetes, Terraform, CI/CD, AWS deploy | |
 | 7 | Docs, architecture diagram, demo | |
 
@@ -51,6 +51,25 @@ uvicorn app.main:app --reload
 Open http://localhost:8000/docs. Check http://localhost:8000/health/ai to see if Ollama and both models are ready.
 
 **Or with Docker:** `docker compose up --build` (Ollama still runs on your machine).
+
+## Security and governance (stage 4)
+First run: `POST /api/v1/auth/setup` creates the first admin (works once). Then use the green **Authorize**
+button in `/docs` (username = your email). On a public server set `SETUP_TOKEN` so nobody else can claim the
+first admin account.
+
+| Role | Can do |
+|---|---|
+| viewer | read documents, search, ask questions, view own usage |
+| analyst | everything a viewer can + upload/delete/index documents + run agents |
+| admin | everything + manage users, read the audit log, see usage and cost for everyone |
+
+| Method | Path | Who |
+|---|---|---|
+| GET/POST | `/api/v1/auth/status`, `/auth/setup` | public (setup works once) |
+| POST | `/api/v1/auth/login`, `/auth/logout`; GET `/auth/me` | login / any user |
+| GET/POST/PATCH | `/api/v1/users`, `/users/{id}` | admin |
+| GET | `/api/v1/audit`, `/audit/verify` | admin |
+| GET | `/api/v1/usage/me` (any user), `/usage/summary` (admin) | |
 
 ## Agents (stage 3)
 | Agent | Allowed tools | Max steps |
@@ -113,3 +132,17 @@ Try: `POST /api/v1/agents/researcher/run` with `{"task": "What did the trainee d
 - **Safe calculator** - arithmetic is parsed with `ast` (no `eval`), so it cannot run code.
 - **Resilient tool loop** - a failing tool returns an error to the model instead of crashing the run;
   small models that write tool calls as JSON text are handled too.
+- **Roles enforced on every endpoint** - viewer < analyst < admin, checked by one reusable dependency.
+  Refused attempts are written to the audit log.
+- **Revocable sessions** - random tokens, only their SHA-256 hash is stored; logout, a password change or
+  disabling a user ends sessions immediately (a deliberate choice over stateless JWTs).
+- **Passwords** - scrypt with a per-user salt (standard library, no extra dependency); login errors never
+  reveal whether an email exists; repeated failures lock the account for a while.
+- **Tamper-evident audit log** - each event stores the hash of the previous one;
+  `GET /api/v1/audit/verify` detects edited or removed rows and returns a head hash you can save elsewhere.
+- **Usage governance** - tokens counted per user for every answer and agent run, a daily per-user limit
+  (HTTP 429, audited), and a cost report comparing real cost ($0, local models) with an illustrative
+  hosted-API price.
+- **Privacy by design** - private agent runs (other users get 404, not 403), long user text is clipped
+  in the audit log, passwords never reach it.
+- **Safe upgrades** - new columns are added to existing dev databases automatically (Alembic comes with AWS).

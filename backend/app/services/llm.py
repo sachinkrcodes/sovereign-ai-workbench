@@ -13,6 +13,7 @@ class ChatModel(Protocol):
     model_name: str
 
     def generate(self, system: str, user: str) -> str: ...
+    def generate_with_usage(self, system: str, user: str) -> tuple[str, dict]: ...
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict: ...
 
 
@@ -39,16 +40,25 @@ class OllamaChat:
             raise LLMUnavailable(unreachable_message(self.base_url, self.model_name)) from exc
         if response.status_code != 200:
             raise LLMUnavailable(describe_ollama_http_error(response, self.model_name))
-        message = response.json().get("message") or {}
+        data = response.json()
+        message = data.get("message") or {}
+        # Ollama reports how many tokens it read and wrote; we keep them for usage tracking.
+        message["usage"] = {
+            "prompt_tokens": int(data.get("prompt_eval_count") or 0),
+            "completion_tokens": int(data.get("eval_count") or 0),
+        }
         if not (message.get("content") or "").strip() and not message.get("tool_calls"):
             raise LLMUnavailable("The model returned an empty answer. Try again.")
         return message
 
-    def generate(self, system: str, user: str) -> str:
+    def generate_with_usage(self, system: str, user: str) -> tuple[str, dict]:
         message = self.chat(
             [{"role": "system", "content": system}, {"role": "user", "content": user}]
         )
-        return (message.get("content") or "").strip()
+        return (message.get("content") or "").strip(), message.get("usage") or {}
+
+    def generate(self, system: str, user: str) -> str:
+        return self.generate_with_usage(system, user)[0]
 
 
 @lru_cache

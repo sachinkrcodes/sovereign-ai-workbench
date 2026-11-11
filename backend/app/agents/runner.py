@@ -33,6 +33,8 @@ class AgentResult:
     sources: list[dict] = field(default_factory=list)
     model: str | None = None
     error: str | None = None
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 def extract_tool_calls(message: dict, known_tools: set[str]) -> list[ToolCall]:
@@ -126,15 +128,25 @@ def run_agent(
     steps: list[dict] = []
     sources: list[dict] = []
     deadline = time.monotonic() + spec.max_seconds
+    tokens = {"prompt": 0, "completion": 0}
+
+    def tally(message: dict) -> None:
+        usage = message.get("usage") or {}
+        tokens["prompt"] += int(usage.get("prompt_tokens") or 0)
+        tokens["completion"] += int(usage.get("completion_tokens") or 0)
 
     def finish(status: str, answer: str | None, error: str | None = None) -> AgentResult:
-        return AgentResult(status, answer, steps, sources, getattr(chat, "model_name", None), error)
+        return AgentResult(
+            status, answer, steps, sources, getattr(chat, "model_name", None), error,
+            tokens["prompt"], tokens["completion"],
+        )
 
     try:
         for _ in range(spec.max_steps):
             if time.monotonic() > deadline:
                 break
             message = chat.chat(messages, tool_specs)
+            tally(message)
             calls = extract_tool_calls(message, known)
             if not calls:
                 answer = (message.get("content") or "").strip()
@@ -162,6 +174,7 @@ def run_agent(
             }
         )
         message = chat.chat(messages, [])
+        tally(message)
         answer = (message.get("content") or "").strip()
         return finish("step_limit", answer or "The agent produced no answer.")
     except LLMUnavailable as exc:

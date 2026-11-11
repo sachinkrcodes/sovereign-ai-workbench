@@ -4,22 +4,25 @@ import time
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.agents import registry, runner
 from app.agents.tools import TOOLS, ToolContext
+from app.config import Settings, get_settings
 from app.database import get_db
-from app.models import AgentRun
+from app.deps import enforce_token_budget, require_role
+from app.models import AgentRun, User
 from app.schemas import AgentInfo, AgentRunList, AgentRunOut, AgentRunRequest
+from app.services import audit, usage
 from app.services.embeddings import Embedder, get_embedder
 from app.services.llm import ChatModel, get_chat
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 
 
-@router.get("", response_model=list[AgentInfo])
+@router.get("", response_model=list[AgentInfo], dependencies=[Depends(require_role("viewer"))])
 def list_agents():
     return [
         AgentInfo(
@@ -39,21 +42,26 @@ def list_runs(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
     db: Session = Depends(get_db),
+    user: User = Depends(require_role("viewer")),
 ):
-    stmt = select(AgentRun)
-    count_stmt = select(func.count()).select_from(AgentRun)
+    """Admins see every run; everyone else sees only their own."""
+    conditions = []
     if agent:
-        stmt = stmt.where(AgentRun.agent == agent)
-        count_stmt = count_stmt.where(AgentRun.agent == agent)
-    total = db.scalar(count_stmt) or 0
-    items = db.scalars(stmt.order_by(AgentRun.created_at.desc()).offset(offset).limit(limit)).all()
+        conditions.append(AgentRun.agent == agent)
+    if user.role != "admin":
+        conditions.append(AgentRun.user_id == user.id)
+    total = db.scalar(select(func.count()).select_from(AgentRun).where(*conditions)) or 0
+    items = db.scalars(
+        select(AgentRun).where(*conditions).order_by(AgentRun.created_at.desc()).offset(offset).limit(limit)
+    ).all()
     return AgentRunList(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunOut)
-def get_run(run_id: str, db: Session = Depends(get_db)):
+def get_run(run_id: str, db: Session = Depends(get_db), user: User = Depends(require_role("viewer"))):
     run = db.get(AgentRun, run_id)
-    if run is None:
+    # Someone else's run looks exactly like a missing one (do not reveal that it exists).
+    if run is None or (user.role != "admin" and run.user_id != user.id):
         raise HTTPException(status_code=404, detail="Run not found.")
     return run
 
@@ -61,31 +69,60 @@ def get_run(run_id: str, db: Session = Depends(get_db)):
 @router.post("/{name}/run", response_model=AgentRunOut)
 def run_agent(
     name: str,
-    request: AgentRunRequest,
+    body: AgentRunRequest,
+    request: Request,
+    user: User = Depends(require_role("analyst")),
     db: Session = Depends(get_db),
     embedder: Embedder = Depends(get_embedder),
     chat: ChatModel = Depends(get_chat),
+    settings: Settings = Depends(get_settings),
 ):
     spec = registry.get_agent(name)
     if spec is None:
         raise HTTPException(status_code=404, detail=f"Unknown agent '{name}'.")
+    enforce_token_budget(db, user, settings, request)
 
     started = time.perf_counter()
-    result = runner.run_agent(spec, request.task, chat, ToolContext(db=db, embedder=embedder), TOOLS)
+    result = runner.run_agent(spec, body.task, chat, ToolContext(db=db, embedder=embedder), TOOLS)
+    duration_ms = int((time.perf_counter() - started) * 1000)
     run = AgentRun(
         id=uuid.uuid4().hex,
         agent=spec.name,
-        task=request.task,
+        task=body.task,
         status=result.status,
         answer=result.answer,
         steps=result.steps,
         sources=result.sources,
         model=result.model,
         error=result.error,
-        duration_ms=int((time.perf_counter() - started) * 1000),
+        user_id=user.id,
+        duration_ms=duration_ms,
     )
     db.add(run)
     db.commit()  # the run is recorded even when it failed (audit trail)
+
+    if result.prompt_tokens or result.completion_tokens:
+        usage.record_usage(
+            db, user=user, kind="agent_run", model=result.model,
+            prompt_tokens=result.prompt_tokens, completion_tokens=result.completion_tokens,
+            duration_ms=duration_ms, ref=run.id,
+        )
+    audit.record(
+        db,
+        action="agent.run",
+        status="failed" if result.status == "failed" else "success",
+        user=user,
+        resource_type="agent_run",
+        resource_id=run.id,
+        detail={
+            "agent": spec.name,
+            "task": audit.clip(body.task),
+            "run_status": result.status,
+            "tool_calls": len(result.steps),
+            "denied_tool_calls": sum(1 for s in result.steps if s["status"] == "denied"),
+        },
+        request=request,
+    )
 
     if result.status == "failed":
         raise HTTPException(status_code=503, detail=result.error or "The AI engine is unavailable.")

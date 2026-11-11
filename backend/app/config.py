@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_name: str = "Sovereign AI Workbench"
-    app_version: str = "0.3.0"
+    app_version: str = "0.4.0"
     environment: str = "development"
 
     # SQLite for quick local runs; Postgres (pgvector) in Docker / AWS.
@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     ai_timeout_seconds: int = 180
     chat_context_tokens: int = 6144
     embed_batch_size: int = 16
+
+    # Security (stage 4)
+    setup_token: str = ""  # if set, creating the very first admin requires this value
+    token_ttl_hours: int = 12
+    login_max_failures: int = 5
+    login_window_minutes: int = 15
+
+    # Usage governance (stage 4). Models run locally, so real cost is $0; the "equivalent"
+    # prices below are ILLUSTRATIVE rates (change them) to show what a hosted API would charge.
+    daily_token_limit: int = 200000  # per non-admin user per UTC day
+    cloud_price_per_million_prompt: float = 0.15
+    cloud_price_per_million_completion: float = 0.60
 
     # Comma separated list of allowed browser origins
     cors_origins: str = "http://localhost:3000,http://localhost:5173"

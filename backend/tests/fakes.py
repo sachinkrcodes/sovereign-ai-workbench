@@ -45,16 +45,19 @@ class FakeChat:
         self.tool_turns: list[dict] = []
         self.chat_calls: list[tuple[int, list | None]] = []
 
-    def generate(self, system: str, user: str) -> str:
+    def generate_with_usage(self, system: str, user: str) -> tuple[str, dict]:
         if self.fail:
             raise LLMUnavailable("Cannot reach Ollama (test).")
         self.last_system, self.last_user = system, user
-        return self.reply
+        return self.reply, {"prompt_tokens": 100, "completion_tokens": 20}
+
+    def generate(self, system: str, user: str) -> str:
+        return self.generate_with_usage(system, user)[0]
 
     def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
         if self.fail:
             raise LLMUnavailable("Cannot reach Ollama (test).")
         self.chat_calls.append((len(messages), tools))
-        if self.tool_turns:
-            return self.tool_turns.pop(0)
-        return {"role": "assistant", "content": "Done."}
+        turn = dict(self.tool_turns.pop(0)) if self.tool_turns else {"role": "assistant", "content": "Done."}
+        turn.setdefault("usage", {"prompt_tokens": 50, "completion_tokens": 10})
+        return turn

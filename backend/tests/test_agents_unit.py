@@ -185,3 +185,12 @@ def test_tool_specs_have_the_shape_ollama_expects():
         spec = tool.spec()
         assert spec["type"] == "function" and spec["function"]["name"] == tool.name
         assert spec["function"]["parameters"]["type"] == "object"
+
+
+def test_token_usage_is_added_up_across_model_calls():
+    turns = [
+        {**call("echo"), "usage": {"prompt_tokens": 40, "completion_tokens": 5}},
+        {**final("done"), "usage": {"prompt_tokens": 60, "completion_tokens": 15}},
+    ]
+    result = run_agent(make_spec(), "task", ScriptedChat(turns), CTX, make_tools())
+    assert (result.prompt_tokens, result.completion_tokens) == (100, 20)

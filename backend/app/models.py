@@ -6,7 +6,7 @@ used for semantic search)."""
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,6 +33,7 @@ class Document(Base):
     char_count: Mapped[int] = mapped_column(Integer, default=0)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    uploaded_by: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     chunks: Mapped[list["Chunk"]] = relationship(
         back_populates="document",
@@ -92,5 +93,71 @@ class AgentRun(Base):
     sources: Mapped[list] = mapped_column(JSON, default=list)
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_new_id)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    password_hash: Mapped[str] = mapped_column(String(300))
+    role: Mapped[str] = mapped_column(String(20))  # viewer | analyst | admin
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class AuthToken(Base):
+    """Login sessions. Only a SHA-256 hash of the token is stored, so a database leak
+    does not leak usable tokens. Server-side tokens can be revoked instantly."""
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        String(32), ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_ts: Mapped[int] = mapped_column(Integer)
+    expires_ts: Mapped[int] = mapped_column(Integer, index=True)
+    revoked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class AuditEvent(Base):
+    """Append-only, tamper-evident log: every row stores the hash of the previous row."""
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[str] = mapped_column(String(32), index=True)  # ISO-8601 UTC, fixed width
+    user_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    user_email: Mapped[str | None] = mapped_column(String(254), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(60), index=True)
+    status: Mapped[str] = mapped_column(String(20))  # success | failed | denied
+    resource_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    prev_hash: Mapped[str] = mapped_column(String(64))
+    event_hash: Mapped[str] = mapped_column(String(64))
+
+
+class UsageEvent(Base):
+    """AI usage per user (tokens), for limits and cost reporting."""
+
+    __tablename__ = "usage_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[str] = mapped_column(String(32), index=True)
+    user_id: Mapped[str] = mapped_column(String(32), index=True)
+    kind: Mapped[str] = mapped_column(String(20))  # ask | agent_run
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    ref: Mapped[str | None] = mapped_column(String(64), nullable=True)

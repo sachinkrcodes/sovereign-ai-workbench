@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database import init_db
-from app.routers import agents, documents, health, indexing, search
+from app.routers import agents, audit, auth, documents, health, indexing, search, usage, users
 
 settings = get_settings()
 
@@ -34,7 +34,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Private, governed AI workbench - documents, cited answers and governed agents (stage 3).",
+    description="Private, governed AI workbench - documents, cited answers, governed agents, roles and audit (stage 4).",
     lifespan=lifespan,
 )
 
@@ -52,6 +52,7 @@ app.add_middleware(
 async def request_context(request: Request, call_next):
     """Give every request an ID and log how long it took (useful later in CloudWatch)."""
     request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    request.state.request_id = request_id
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
@@ -68,6 +69,10 @@ app.include_router(documents.router)
 app.include_router(indexing.router)
 app.include_router(search.router)
 app.include_router(agents.router)
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(audit.router)
+app.include_router(usage.router)
 
 
 @app.get("/", tags=["health"])

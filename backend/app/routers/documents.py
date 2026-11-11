@@ -6,15 +6,17 @@ import re
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.database import get_db
-from app.models import Chunk, Document
+from app.deps import require_role
+from app.models import Chunk, Document, User
 from app.schemas import ChunkList, DocumentList, DocumentOut
+from app.services import audit
 from app.services.chunking import chunk_pages
 from app.services.extract import ExtractionError, extract_document, sniff_matches
 from app.services.storage import Storage, get_storage
@@ -44,6 +46,8 @@ def _get_or_404(db: Session, document_id: str) -> Document:
 @router.post("", response_model=DocumentOut, status_code=201)
 def upload_document(
     file: Annotated[UploadFile, File(description="PDF, DOCX, TXT or MD file")],
+    request: Request,
+    user: User = Depends(require_role("analyst")),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(get_settings),
@@ -98,6 +102,7 @@ def upload_document(
         page_count=extracted.page_count,
         char_count=sum(len(c.text) for c in chunk_data),
         chunk_count=len(chunk_data),
+        uploaded_by=user.id,
         chunks=[
             Chunk(
                 chunk_index=c.chunk_index,
@@ -126,10 +131,14 @@ def upload_document(
         raise
 
     logger.info("uploaded document=%s type=%s chunks=%d", document.id, ext, len(chunk_data))
+    audit.record(
+        db, action="document.upload", user=user, resource_type="document", resource_id=document.id,
+        detail={"filename": filename, "size_bytes": len(data), "chunks": len(chunk_data)}, request=request,
+    )
     return document
 
 
-@router.get("", response_model=DocumentList)
+@router.get("", response_model=DocumentList, dependencies=[Depends(require_role("viewer"))])
 def list_documents(
     q: Annotated[str | None, Query(max_length=100, description="Search in file name")] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -151,12 +160,12 @@ def list_documents(
     return DocumentList(items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/{document_id}", response_model=DocumentOut)
+@router.get("/{document_id}", response_model=DocumentOut, dependencies=[Depends(require_role("viewer"))])
 def get_document(document_id: str, db: Session = Depends(get_db)):
     return _get_or_404(db, document_id)
 
 
-@router.get("/{document_id}/chunks", response_model=ChunkList)
+@router.get("/{document_id}/chunks", response_model=ChunkList, dependencies=[Depends(require_role("viewer"))])
 def get_document_chunks(
     document_id: str,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -183,15 +192,22 @@ def get_document_chunks(
 @router.delete("/{document_id}", status_code=204)
 def delete_document(
     document_id: str,
+    request: Request,
+    user: User = Depends(require_role("analyst")),
     db: Session = Depends(get_db),
     storage: Storage = Depends(get_storage),
 ):
     document = _get_or_404(db, document_id)
     storage_key = document.storage_key
+    filename = document.filename
     db.delete(document)  # chunks are deleted with it (cascade)
     db.commit()
     try:
         storage.delete(storage_key)
     except Exception:
         logger.exception("could not remove stored file %s", storage_key)
+    audit.record(
+        db, action="document.delete", user=user, resource_type="document", resource_id=document_id,
+        detail={"filename": filename}, request=request,
+    )
     return Response(status_code=204)
