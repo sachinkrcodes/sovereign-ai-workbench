@@ -194,3 +194,37 @@ def test_token_usage_is_added_up_across_model_calls():
     ]
     result = run_agent(make_spec(), "task", ScriptedChat(turns), CTX, make_tools())
     assert (result.prompt_tokens, result.completion_tokens) == (100, 20)
+
+
+def test_citation_notice_only_when_sources_were_used_but_not_cited():
+    from app.agents.runner import citation_notice
+    src = [{"filename": "manual.pdf", "page": 3}]
+    assert citation_notice("Close valve A [manual.pdf, p.3].", src) is None
+    assert citation_notice("See manual.pdf for details.", src) is None
+    assert "does not cite" in citation_notice("Close valve A first.", src)
+    assert citation_notice("I could not find this in the uploaded documents.", src) is None
+    assert citation_notice("Close valve A first.", []) is None
+    assert citation_notice(None, src) is None
+
+
+def test_agent_that_wrongly_says_not_found_is_re_answered_from_its_own_passages():
+    from app.services.rag import NOT_FOUND_TEXT
+    chat = ScriptedChat([call("echo", q="x"), final(NOT_FOUND_TEXT), final("The trainee maintained SQL databases [a.pdf, p.2].")])
+    result = run_agent(make_spec(), "What did the trainee do?", chat, CTX, make_tools())
+    assert result.answer.startswith("The trainee maintained")
+    assert result.steps[-1]["tool"] == "answer_check"
+    assert chat.calls[-1][1] == [] and "PASSAGES:" in chat.calls[-1][0][1]["content"]
+
+
+def test_a_genuine_not_found_is_kept_when_the_second_look_agrees():
+    from app.services.rag import NOT_FOUND_TEXT
+    chat = ScriptedChat([call("echo", q="x"), final(NOT_FOUND_TEXT), final(NOT_FOUND_TEXT)])
+    result = run_agent(make_spec(), "unrelated question", chat, CTX, make_tools())
+    assert result.answer == NOT_FOUND_TEXT and all(s["tool"] != "answer_check" for s in result.steps)
+
+
+def test_no_second_look_when_nothing_was_retrieved():
+    from app.services.rag import NOT_FOUND_TEXT
+    chat = ScriptedChat([final(NOT_FOUND_TEXT)])
+    assert run_agent(make_spec(), "q", chat, CTX, make_tools()).answer == NOT_FOUND_TEXT
+    assert len(chat.calls) == 1

@@ -4,6 +4,7 @@ Run locally:  uvicorn app.main:app --reload
 Interactive API docs:  http://localhost:8000/docs"""
 
 import logging
+import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -27,6 +28,9 @@ logger = logging.getLogger("app")
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    from app.services.llm import warm_up
+
+    threading.Thread(target=warm_up, daemon=True).start()
     logger.info("started %s v%s (%s)", settings.app_name, settings.app_version, settings.environment)
     yield
 

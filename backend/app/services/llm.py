@@ -24,13 +24,14 @@ class OllamaChat:
         self.timeout = timeout
         self.num_ctx = num_ctx
 
-    def chat(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+    def chat(self, messages: list[dict], tools: list[dict] | None = None, max_tokens: int = 450) -> dict:
         """Send a conversation, get back the assistant message (may contain tool_calls)."""
         payload: dict = {
             "model": self.model_name,
             "messages": messages,
             "stream": False,
-            "options": {"temperature": 0.1, "num_ctx": self.num_ctx},
+            "keep_alive": "30m",  # keep the model in memory between questions (default is 5 minutes)
+            "options": {"temperature": 0.1, "num_ctx": self.num_ctx, "num_predict": max_tokens},
         }
         if tools:
             payload["tools"] = tools
@@ -53,7 +54,7 @@ class OllamaChat:
 
     def generate_with_usage(self, system: str, user: str) -> tuple[str, dict]:
         message = self.chat(
-            [{"role": "system", "content": system}, {"role": "user", "content": user}]
+            [{"role": "system", "content": system}, {"role": "user", "content": user}], max_tokens=350
         )
         return (message.get("content") or "").strip(), message.get("usage") or {}
 
@@ -70,3 +71,14 @@ def _default_chat() -> OllamaChat:
 def get_chat() -> ChatModel:
     """FastAPI dependency."""
     return _default_chat()
+
+
+def warm_up() -> None:
+    """Load both models into memory at startup so the first real question is not slow."""
+    from app.services.embeddings import get_embedder
+
+    try:
+        get_embedder().embed_query("warm up")
+        get_chat().chat([{"role": "user", "content": "Reply with OK."}], max_tokens=2)
+    except Exception:  # Ollama not running yet: nothing to warm up
+        pass

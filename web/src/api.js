@@ -18,7 +18,7 @@ async function call(path, options = {}) {
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const d = body.detail;
-    throw new Error(typeof d === "string" ? d : d?.message || `Request failed (${res.status})`);
+    throw new Error(typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => x.msg).join("; ") : d?.message || `Request failed (${res.status})`);
   }
   return body;
 }
@@ -47,7 +47,15 @@ export const ask = (query) =>
 export const agents = () => call("/api/v1/agents");
 export const runAgent = (name, task) =>
   call(`/api/v1/agents/${name}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task }) });
-export const auditList = () => call("/api/v1/audit?limit=15");
+export const auditList = (p = {}) => {
+  const clean = Object.fromEntries(Object.entries({ limit: 15, ...p }).filter(([, v]) => v !== "" && v != null));
+  return call(`/api/v1/audit?${new URLSearchParams(clean)}`);
+};
+export const runsList = () => call("/api/v1/agents/runs?limit=20");
+const json = (method, body) => ({ method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+export const createUser = (body) => call("/api/v1/users", json("POST", body));
+export const updateUser = (id, body) => call(`/api/v1/users/${id}`, json("PATCH", body));
+export const deleteDocument = (id) => call(`/api/v1/documents/${id}`, { method: "DELETE" });
 export const auditVerify = () => call("/api/v1/audit/verify");
 export const usageSummary = () => call("/api/v1/usage/summary");
 export const users = () => call("/api/v1/users");

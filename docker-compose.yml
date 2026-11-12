@@ -21,6 +21,7 @@ services:
       ENVIRONMENT: development
       DATABASE_URL: postgresql+psycopg://workbench:workbench_dev_password@db:5432/workbench
       STORAGE_DIR: /srv/data/uploads
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
       # Ollama runs on your own machine (outside Docker); stage 6 moves it into the cloud setup
       OLLAMA_BASE_URL: http://host.docker.internal:11434
     extra_hosts:
@@ -32,6 +33,16 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: http://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
 
 volumes:
   pgdata:

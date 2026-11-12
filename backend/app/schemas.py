@@ -154,6 +154,7 @@ class AgentRunOut(BaseModel):
     sources: list[AgentSourceOut]
     model: str | None
     error: str | None
+    notice: str | None = None
     duration_ms: int
     created_at: datetime
 

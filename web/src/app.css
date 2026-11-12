@@ -1,0 +1,20 @@
+/* App-specific bits. Same two colours as design.css: nothing new is added. */
+.brand{font-family:var(--display);font-weight:800;font-size:1.2rem;letter-spacing:-.02em}
+.auth-wrap{min-height:100vh;display:grid;place-items:center;padding:16px}
+.auth-card{width:min(420px,100%);padding:30px;border:1px solid var(--line);border-radius:28px;box-shadow:var(--shadow)}
+.auth-card h1{font-size:2rem;font-weight:800;margin-bottom:6px}
+.auth-card .sub{margin-bottom:20px}
+.answer-text{font-size:1.05rem;white-space:pre-wrap;max-width:70ch}
+.stack{display:grid;gap:18px}
+label.btn{margin:0;font-size:1rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.stat{padding:14px 16px;border-radius:20px;background:var(--tint)}
+.stat b{display:block;font-family:var(--display);font-size:1.7rem;line-height:1.1}
+.stat span{color:var(--mid);font-size:.85rem}
+.notice{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
+select option{background:var(--bg);color:var(--ink)}
+.tabs.four{grid-template-columns:repeat(4,1fr)}
+.form-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
+.form-row .field{margin:0}
+.row .actions{flex-wrap:nowrap}
+@media (max-width:560px){.tabs.four button{padding:9px 4px;font-size:.8rem}}

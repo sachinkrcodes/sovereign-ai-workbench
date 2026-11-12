@@ -1,5 +1,7 @@
 # Sovereign AI Workbench
 
+![CI](https://github.com/sachinkrcodes/sovereign-ai-workbench/actions/workflows/ci.yml/badge.svg)
+
 A private, governed AI platform for confidential industrial work (SIH 2026, PS **SIH26117**).
 Open-weight LLMs, document search (RAG) with source citations, governed agents, audit logs and
 cost tracking - all running inside your own AWS network, so company data never leaves.
@@ -146,3 +148,9 @@ Try: `POST /api/v1/agents/researcher/run` with `{"task": "What did the trainee d
 - **Privacy by design** - private agent runs (other users get 404, not 403), long user text is clipped
   in the audit log, passwords never reach it.
 - **Safe upgrades** - new columns are added to existing dev databases automatically (Alembic comes with AWS).
+
+## Stage 5 and 6 (web app, CI)
+- `web/` is a React + Vite app (design system: slate + navy, light and dark). Run: `cd web`, `npm install`, `npm run dev`.
+- Admins can add people, change roles, disable accounts, reset passwords, filter the audit log and review every agent run.
+- GitHub Actions (`.github/workflows/ci.yml`) runs the backend tests, builds the web app and builds both Docker images on every push.
+- `docker compose up --build` runs database, backend and web (http://localhost:8080). AWS deployment comes next.

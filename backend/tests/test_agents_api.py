@@ -107,3 +107,13 @@ def test_run_history_is_an_audit_trail(client, chat):
     detail = client.get(f"{AGENTS}/runs/{first['id']}").json()
     assert detail["task"] == "First question here" and detail["answer"] == "one"
     assert client.get(f"{AGENTS}/runs/doesnotexist").status_code == 404
+
+
+def test_uncited_answers_are_flagged_and_cited_ones_are_not(client, chat):
+    upload(client, "pump.txt", PUMP)
+    chat.tool_turns = [tool_call("search_documents", query="pump isolation"), final("Isolate the pump first.")]
+    flagged = run(client, "researcher").json()
+    assert "does not cite" in flagged["notice"]
+    chat.tool_turns = [tool_call("search_documents", query="pump isolation"), final("Isolate it first [pump.txt, p.-].")]
+    assert run(client, "researcher").json()["notice"] is None
+    assert "does not cite" in client.get(f"{AGENTS}/runs/{flagged['id']}").json()["notice"]

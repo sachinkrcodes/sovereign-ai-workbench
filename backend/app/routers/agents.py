@@ -22,6 +22,11 @@ from app.services.llm import ChatModel, get_chat
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 
 
+def _with_notice(run: AgentRun) -> AgentRun:
+    run.notice = runner.citation_notice(run.answer, run.sources or [])  # computed, not stored
+    return run
+
+
 @router.get("", response_model=list[AgentInfo], dependencies=[Depends(require_role("viewer"))])
 def list_agents():
     return [
@@ -54,7 +59,7 @@ def list_runs(
     items = db.scalars(
         select(AgentRun).where(*conditions).order_by(AgentRun.created_at.desc()).offset(offset).limit(limit)
     ).all()
-    return AgentRunList(items=items, total=total, limit=limit, offset=offset)
+    return AgentRunList(items=[_with_notice(i) for i in items], total=total, limit=limit, offset=offset)
 
 
 @router.get("/runs/{run_id}", response_model=AgentRunOut)
@@ -63,7 +68,7 @@ def get_run(run_id: str, db: Session = Depends(get_db), user: User = Depends(req
     # Someone else's run looks exactly like a missing one (do not reveal that it exists).
     if run is None or (user.role != "admin" and run.user_id != user.id):
         raise HTTPException(status_code=404, detail="Run not found.")
-    return run
+    return _with_notice(run)
 
 
 @router.post("/{name}/run", response_model=AgentRunOut)
@@ -126,4 +131,4 @@ def run_agent(
 
     if result.status == "failed":
         raise HTTPException(status_code=503, detail=result.error or "The AI engine is unavailable.")
-    return run
+    return _with_notice(run)

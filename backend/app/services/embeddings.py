@@ -37,7 +37,7 @@ class OllamaEmbedder:
         try:
             response = httpx.post(
                 f"{self.base_url}/api/embed",
-                json={"model": self.model_name, "input": inputs},
+                json={"model": self.model_name, "input": inputs, "keep_alive": "30m"},
                 timeout=self.timeout,
             )
         except httpx.HTTPError as exc:
