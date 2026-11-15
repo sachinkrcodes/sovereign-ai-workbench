@@ -4,6 +4,18 @@ import { Agents } from "./Extra.jsx";
 import Admin from "./Admin.jsx";
 import { Dock, ThemeButton, toast, useElapsed } from "./ui.jsx";
 
+const EXAMPLES = ["Which valve is closed first before maintenance?", "Where is the assembly point?", "How long must the pump logbook be kept?"];
+const SAMPLES = ["pump-station-procedure-v1.pdf", "pump-station-procedure-v2.pdf", "emergency-response-plan.pdf"];
+
+async function loadSamples() {
+  for (const name of SAMPLES) {
+    const blob = await (await fetch(`/samples/${name}`)).blob();
+    try { await api.uploadDocument(new File([blob], name, { type: "application/pdf" })); }
+    catch (e) { if (!/already uploaded/i.test(e.message)) throw e; }
+  }
+  await api.indexAll();
+}
+
 const clip = (t, n = 240) => (t.length > n ? t.slice(0, n) + "…" : t);
 
 function Login({ onDone }) {
@@ -29,6 +41,33 @@ function Login({ onDone }) {
           <input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></div>
         <p className="error" role="alert">{error}</p>
         <button className="btn wide" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+      </form>
+    </main>
+  );
+}
+
+function Setup({ onDone }) {
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true); setError("");
+    try { await api.setup(form); onDone(await api.login(form.email, form.password)); }
+    catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  return (
+    <main className="auth-wrap">
+      <form className="glass auth-card" onSubmit={submit}>
+        <h1>Create the admin account</h1>
+        <p className="sub">First run. This account can add people and see everything. Use a strong password.</p>
+        <div className="field"><label htmlFor="sn">Name</label><input id="sn" value={form.name} onChange={set("name")} required /></div>
+        <div className="field"><label htmlFor="se">Email</label><input id="se" type="email" value={form.email} onChange={set("email")} required /></div>
+        <div className="field"><label htmlFor="sp">Password (8 or more characters)</label><input id="sp" type="password" minLength={8} value={form.password} onChange={set("password")} required /></div>
+        <p className="error" role="alert">{error}</p>
+        <button className="btn wide" disabled={busy}>{busy ? "Creating…" : "Create admin"}</button>
       </form>
     </main>
   );
@@ -69,6 +108,7 @@ function Ask() {
       <form className="glass panel" onSubmit={submit}>
         <div className="field"><label htmlFor="q">Your question</label>
           <textarea id="q" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="What does the shutdown procedure say about valve isolation?" /></div>
+        <div className="actions">{EXAMPLES.map((x) => <button type="button" key={x} className="btn soft small" onClick={() => setQuery(x)}>{x}</button>)}</div>
         <button className="btn wide" disabled={busy || !query.trim()}>{busy ? `Reading your documents… ${secs}s` : "Ask"}</button>
         {busy && <p className="hint">Your own AI is thinking on this computer. Most answers take 10 to 40 seconds.</p>}
       </form>
@@ -104,6 +144,7 @@ function Documents({ canEdit }) {
             <input type="file" hidden accept=".pdf,.docx,.txt,.md" disabled={busy}
               onChange={(e) => e.target.files[0] && run(async () => { await api.uploadDocument(e.target.files[0]); await api.indexAll(); }, "Uploaded and ready to search.")} />
           </label>
+          <button className="btn soft" disabled={busy} onClick={() => run(loadSamples, "Sample documents loaded.")}>Load sample documents</button>
           <button className="btn" disabled={busy} onClick={() => run(api.indexAll, "Indexing finished.")}>{busy ? "Working…" : "Re-index all"}</button>
         </section>
       )}
@@ -135,7 +176,7 @@ function Documents({ canEdit }) {
 const HEADS = {
   ask: ["Ask your documents", "Answers come from your files and always show where they came from."],
   docs: ["Documents", "Upload files, then index them so they can be searched."],
-  agents: ["Agents", "Helpers with limited permissions. Every step they take is recorded."],
+  agents: ["Agents", "Each one does a different job. Every run is recorded with its steps."],
   admin: ["Admin", "People, activity, agent runs and usage. Visible to admins only."],
 };
 
@@ -143,9 +184,11 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(!api.getToken());
   const [tab, setTab] = useState("ask");
+  const [setupRequired, setSetupRequired] = useState(false);
+  useEffect(() => { if (!api.getToken()) api.authStatus().then((s) => setSetupRequired(s.setup_required)).catch(() => {}); }, []);
   useEffect(() => { if (api.getToken()) api.me().then(setUser).catch(() => {}).finally(() => setReady(true)); }, []);
   if (!ready) return null;
-  if (!user) return <Login onDone={setUser} />;
+  if (!user) return setupRequired ? <Setup onDone={setUser} /> : <Login onDone={setUser} />;
   const tabs = [{ id: "ask", label: "Ask" }, { id: "docs", label: "Documents" }, { id: "agents", label: "Agents" },
     ...(user.role === "admin" ? [{ id: "admin", label: "Admin" }] : [])];
   const initials = user.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();

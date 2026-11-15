@@ -1,0 +1,54 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 638 >>
+stream
+BT /F1 11 Tf 56 770 Td 15 TL (Harbor Point Pump Station: Operating Procedure, Version 2 \(page 1 of 3\)) Tj T* () Tj T* (Scope. This procedure covers pumps P-101 and P-102 at the Harbor Point pump station. It) Tj T* (applies to all operators and maintenance staff.) Tj T* () Tj T* (The shift supervisor owns this procedure and reviews it every 6 months.) Tj T* () Tj T* (Operators must hold a valid permit to work before starting any maintenance task.) Tj T* () Tj T* (Visitors are not allowed in the pump hall without an escort.) Tj T* () Tj T* (Contractors must complete the site induction before entering the pump hall.) Tj T* () Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+7 0 obj
+<< /Length 699 >>
+stream
+BT /F1 11 Tf 56 770 Td 15 TL (Isolation before maintenance \(page 2 of 3\)) Tj T* () Tj T* (Operators must close the suction valve before the discharge valve.) Tj T* () Tj T* (Operators must lock out the pump motor at the breaker and attach a personal lock.) Tj T* () Tj T* (The pressure gauge must read below 0.5 bar before any flange is opened.) Tj T* () Tj T* (Operators must take a photo of the gauge reading before and after isolation.) Tj T* () Tj T* (Operators should wait 30 minutes after shutdown before touching the pump casing.) Tj T* () Tj T* (Three people must confirm the lock-out on the permit.) Tj T* () Tj T* (Never open a flange while the line is still pressurized.) Tj T* () Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 9 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+9 0 obj
+<< /Length 470 >>
+stream
+BT /F1 11 Tf 56 770 Td 15 TL (Emergency shutdown and records \(page 3 of 3\)) Tj T* () Tj T* (Press the red emergency stop button on panel A to stop both pumps.) Tj T* () Tj T* (Call the control room on extension 4420 within 1 minute.) Tj T* () Tj T* (Log every shutdown in the pump logbook with the time and the reason.) Tj T* () Tj T* (The logbook must be kept for 7 years.) Tj T* () Tj T* (Operators should inspect the seal for leakage once per shift.) Tj T* () Tj ET
+endstream
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000197 00000 n 
+0000000323 00000 n 
+0000001012 00000 n 
+0000001138 00000 n 
+0000001888 00000 n 
+0000002014 00000 n 
+trailer
+<< /Size 10 /Root 1 0 R >>
+startxref
+2535
+%%EOF

@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 const KEY = "sovereign_token";
 
 export const getToken = () => localStorage.getItem(KEY);
@@ -45,8 +45,8 @@ export const ask = (query) =>
   call("/api/v1/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, top_k: 5 }) });
 
 export const agents = () => call("/api/v1/agents");
-export const runAgent = (name, task) =>
-  call(`/api/v1/agents/${name}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task }) });
+export const runAgent = (name, task, documentIds = []) =>
+  call(`/api/v1/agents/${name}/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ task, document_ids: documentIds }) });
 export const auditList = (p = {}) => {
   const clean = Object.fromEntries(Object.entries({ limit: 15, ...p }).filter(([, v]) => v !== "" && v != null));
   return call(`/api/v1/audit?${new URLSearchParams(clean)}`);
@@ -59,3 +59,5 @@ export const deleteDocument = (id) => call(`/api/v1/documents/${id}`, { method: 
 export const auditVerify = () => call("/api/v1/audit/verify");
 export const usageSummary = () => call("/api/v1/usage/summary");
 export const users = () => call("/api/v1/users");
+export const authStatus = () => call("/api/v1/auth/status");
+export const setup = (body) => call("/api/v1/auth/setup", json("POST", body));
